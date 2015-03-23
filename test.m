@@ -1,82 +1,52 @@
-            [row_neg, col_neg] = find(map < 0);
-            [row_zero, col_zero] = find(map == 0);
-            [row_pos, col_pos] = find(map > 0);
-            indices = sub2ind(size(map2), col_neg, row_neg);
-            map2(indices) = 0;
-            indices = sub2ind(size(map2), col_zero, row_zero);
-            map2(indices) = 0;
-            indices = sub2ind(size(map2), col_pos, row_pos);
-            map2(indices) = 1;
-            
-            % Get the "goal" point
-            [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-            goal = [i j]
-            
-            %Initialyze the navigation object
-            dx = DXform(map2, 'metric', 'cityblock');
-            dx.plot()
-            pause(5)
-            dx.plan(goal);
-            dx.plot()
-            pause(5)
-            
-            % Get the "start" point
-            i = find(map==0);
-            tmp = dx.distancemap(i);
-            i2 = find(tmp == min(tmp));
+    elseif strcmp(fsm, 'findangle'),
+        [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+        from = double([i j]);
+        to = double(to);
+        deltax = to(1) - from(1);
+        deltay = to(2) - from(2);
+        angl = atan2(deltay, deltax);
+        fsm = 'rotate';
+    
+    elseif strcmp(fsm, 'rotate'),
+        forwBackVel = 0;
+        leftRightVel = 0;
+        rotVel = 10*angdiff(angl, youbotEuler(3));
+        if abs(angdiff(angl, youbotEuler(3))) < 1/180*pi,
+            rotVel = 0;
+            fsm = 'drive';
+        end
 
-            if size(i2, 1) > 0,
-                [x y] = ind2sub(size(map), i(i2(1)));
-                start = [y x]
-                
-                % Find the path to the start point
-                dx.path(start);
-                path = dx.path(start);
-                path = [flipud(path) ; start] ./ 4
-                pause(5);
+    elseif strcmp(fsm, 'drive'),
+        forwBackVel = 0;
+        leftRightVel = 0;
+        rotVel = 0;
+        tresh = 2;
+        
+        [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+        d = pdist([to ; [i j]], 'euclidean');
+        
+        if (size(destination, 1) > 0) && (d < 2) && (map(destination(1), destination(2)) < -tresh || map(destination(1), destination(2)) > tresh),
+            % robot_path = [];
+            fsm = 'checkpoint';
+        else
+            if d < .5,
+                fsm = 'checkpoint';
             else
-                disp('No start point');
-                fsm = 'finished';
+                forwBackVel = -20*d;
+                rotVel = 20*angdiff(angl, youbotEuler(3));
             end
             
-            
-            
-            
-            
-            
-
-            izeros = find(map == 0);
-            
-            map2(find(map < 0)) = 0;
-            map2(izeros) = 0;
-            map2(find(map > 0)) = 1;
-            
-            % Get the "goal" point
-            [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-            goal = [i j]
-            
-            %Initialyze the navigation object
-            dx = DXform(map2, 'metric', 'cityblock');
-            dx.plot()
-            pause(5)
-            dx.plan(goal);
-            dx.plot()
-            pause(5)
-            
-            % Get the "start" point
-            tmp = dx.distancemap(izeros);
-            i2 = find(tmp == min(tmp));
-
-            if size(i2, 1) > 0,
-                [x y] = ind2sub(size(map), izeros(i2(1)));
-                start = [y x]
-                
-                % Find the path to the start point
-                dx.path(start);
-                path = dx.path(start);
-                path = [flipud(path) ; start] ./ 4
-                pause(5);
-            else
-                disp('No start point');
-                fsm = 'finished';
-            end
+            % if d > 1,
+            %    if (abs(angdiff(angl, youbotEuler(3))) > 4/180*pi),
+            %        fsm = 'findangle';
+            %    end
+            %    rotVel = 20*angdiff(angl, youbotEuler(3));
+            %
+            % elseif d > .5,
+            %     fsm = 'findangle';
+            % else
+            %     forwBackVel = 0;
+            %     rotVel = 0;
+            %     fsm = 'checkpoint';
+            % end
+        end

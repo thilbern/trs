@@ -1,12 +1,12 @@
 function mout = map_refactor (map)
     mout = zeros(size(map)) + 0.5;
     err = 0;
-    
+    %mur
     indices_pos = find(map > 0 + err);
     mout(indices_pos) = map(indices_pos);
     
     indices_neg = find(map < 0 - err);
-    mout(indices_neg) = map(indices_neg);
+    
     
     % inflate walls
     for ind = indices_pos',
@@ -26,6 +26,24 @@ function mout = map_refactor (map)
         
         if (j < size(mout, 2)),
             mout(i, j+1) = err + 1;
+        end
+        
+        %diag
+        
+        if (i > 2 && j >2 ),
+            mout(i-1, j-1) = err + 1;
+        end
+        
+        if (i > 2 && j < size(mout, 2) ),
+            mout(i-1, j+1) = err + 1;
+        end
+        
+        if (i < size(mout, 1) && j > 2),
+            mout(i+1, j-1) = err + 1;
+        end
+        
+        if (i < size(mout, 1) && j < size(mout, 2)),
+            mout(i+1, j+1) = err + 1;
         end
     end
     
@@ -68,9 +86,10 @@ function mout = map_refactor (map)
             end
         end
     end
-    
-    mout = floodfill(istart, jstart, mout, 0);
+    mout = floodfill(istart, jstart, mout, -8);
+   
     mout(mout == 0.5) = 1000;
+end
         
         
     

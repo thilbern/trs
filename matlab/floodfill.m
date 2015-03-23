@@ -1,4 +1,4 @@
-function img = floodfill(x,y,img,value)
+function img = floodfill(y,x,img,value)
     % http://stackoverflow.com/questions/14238083/flood-fill-using-matlab
     import java.util.LinkedList
     q = LinkedList();

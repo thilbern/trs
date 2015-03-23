@@ -6,3 +6,4 @@ function[x, y] = wrapper_matrix_to_vrep (i, j)
     
     x = ((j - offset) ./ 4) - halfwsize;
     y = ((-i + offset) ./ 4) + wsize - halfwsize;
+end
