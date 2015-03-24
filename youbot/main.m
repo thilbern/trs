@@ -96,7 +96,7 @@ map = zeros(70, 70);
 maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
 
-[i j] = wrapper_vrep_to_matrix([-5 -5], [-5.25 -5.5])
+[i j] = wrapper_vrep_to_matrix([-2 -2], [-4 -5.25])
 robot_path = [i ; j]' % Matrix representation
 
 destination = [];
@@ -186,28 +186,21 @@ while true,
             robot_path = robot_path(2:end,:);
             fsm = 'movingtopoint';
         else
-            maptmp = map_refactor(map);
-            
-            % Print the map
-            print_map(313, maptmp);
-            
-            izeros = find(map == 0 & maptmp < 0) ;
-            
-            map2(find(maptmp < 0)) = 0;
-            map2(izeros) = 0;
-            map2(find(maptmp > 0)) = 1;
-            
             % Get the "goal" point
             [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
             goal = int32([j i])
             
-            map2(goal(1), goal(2)) = 0; % On triche
-            map2(goal(1) + 1, goal(2)) = 0; % On triche
-            map2(goal(1), goal(2)+1) = 0; % On triche
-            map2(goal(1) -1, goal(2)) = 0; % On triche
-            map2(goal(1), goal(2)-1) = 0; % On triche
+            % Refactor the map
+            maptmp = map_refactor(map, [i j]);
+            print_map(313, maptmp);
             
-            %Initialyze the navigation object
+            % Create the map to give to DXform
+            izeros = find(map == 0 & maptmp < 0) ;
+            map2(find(maptmp < 0)) = 0;
+            map2(izeros) = 0;
+            map2(find(maptmp > 0)) = 1;        
+            
+            %vInitialyze the navigation object
             dx = DXform(map2, 'metric', 'cityblock');
             dx.plan(goal);
             
