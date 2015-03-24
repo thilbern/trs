@@ -1,6 +1,6 @@
 function[x, y] = wrapper_matrix_to_vrep (i, j)
     % World size
-    offset = 2;
+    offset = 3;
     halfwsize = 7.45;
     wsize = 7.45 * 2;
     

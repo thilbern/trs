@@ -1,48 +1,48 @@
-function mout = map_refactor (map)
+function mout = map_refactor (map, goal)
     mout = zeros(size(map)) + 0.5;
     err = 0;
+    tresh = 1;
     %mur
     indices_pos = find(map > 0 + err);
     mout(indices_pos) = map(indices_pos);
     
     indices_neg = find(map < 0 - err);
     
-    
     % inflate walls
     for ind = indices_pos',
         [i j] = ind2sub(size(map), ind);
         
-        if (i > 2),
+        if (i > 2 && (pdist([goal ; [(i-1) j]], 'euclidean') > tresh)),
             mout(i-1, j) = err + 1;
         end
         
-        if (j > 2),
+        if (j > 2 && (pdist([goal ; [i (j-1)]], 'euclidean') > tresh)),
             mout(i, j-1) = err + 1;
         end
         
-        if (i < size(mout, 1)),
+        if (i < size(mout, 1) && (pdist([goal ; [(i+1) j]], 'euclidean') > tresh)),
             mout(i+1, j) = err + 1;
         end
         
-        if (j < size(mout, 2)),
+        if (j < size(mout, 2) && (pdist([goal ; [i (j+1)]], 'euclidean') > tresh)),
             mout(i, j+1) = err + 1;
         end
         
         %diag
         
-        if (i > 2 && j >2 ),
+        if (i > 2 && j >2 && (pdist([goal ; [(i-1) (j-1)]], 'euclidean') > tresh)),
             mout(i-1, j-1) = err + 1;
         end
         
-        if (i > 2 && j < size(mout, 2) ),
+        if (i > 2 && j < size(mout, 2) && (pdist([goal ; [(i-1) (j+1)]], 'euclidean') > tresh)),
             mout(i-1, j+1) = err + 1;
         end
         
-        if (i < size(mout, 1) && j > 2),
+        if (i < size(mout, 1) && j > 2 && (pdist([goal ; [(i+1) (j-1)]], 'euclidean') > tresh)),
             mout(i+1, j-1) = err + 1;
         end
         
-        if (i < size(mout, 1) && j < size(mout, 2)),
+        if (i < size(mout, 1) && j < size(mout, 2) && (pdist([goal ; [(i+1) (j+1)]], 'euclidean') > tresh)),
             mout(i+1, j+1) = err + 1;
         end
     end

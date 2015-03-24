@@ -16,7 +16,7 @@ function path_out = reduce_path (path_in)
                 keep(i) = 0;
             end
         end
-        keep = [keep(keep > 0) size(path_in, 1)]
+        keep = [keep(keep > 0) size(path_in, 1)];
         
         path_out = path_in(keep,:);
     

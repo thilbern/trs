@@ -96,10 +96,11 @@ map = zeros(70, 70);
 maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
 
-[i j] = wrapper_vrep_to_matrix([-2 -2], [-4 -5.25])
+[i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25])
 robot_path = [i ; j]' % Matrix representation
 
 destination = [];
+to = [];
 
 
 % Make sure everything is settled before we start
@@ -173,10 +174,10 @@ while true,
         drawnow;
         
         % Print the map
-        print_map(312, map);
+        print_map(312, map, to, robot_path);
          
         % Print the map
-        print_map(313, maptmp);
+        print_map(313, maptmp, [], []);
          
     end
     
@@ -192,7 +193,7 @@ while true,
             
             % Refactor the map
             maptmp = map_refactor(map, [i j]);
-            print_map(313, maptmp);
+            print_map(313, maptmp, [], []);
             
             % Create the map to give to DXform
             izeros = find(map == 0 & maptmp < 0) ;
@@ -213,17 +214,14 @@ while true,
                 start = [j i]
                 
                 % Find the robot_path to the start point
-                dx.path(start);
                 robot_path = dx.path(start);
                 robot_path = [flipud(robot_path) ; start];
-                robot_path = switch_column(robot_path, 1, 2)
+                robot_path = switch_column(robot_path, 1, 2);
                 robot_path = reduce_path (robot_path)
                 destination = switch_column(start, 1, 2);
-                
-                pause(5);
             else
-                disp('No start point');
-                fsm = 'finished';
+                disp('No start point. The map is complete');
+                fsm = 'savemap';
             end
         end
         
@@ -262,6 +260,9 @@ while true,
                 rotVel = 10 * angdiff(angl, youbotEuler(3));
             end
         end
+    elseif strcmp(fsm, 'savemap'),
+        fsm = 'finished';
+    
     elseif strcmp(fsm, 'finished'),
         pause(3);
         break;
