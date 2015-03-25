@@ -62,7 +62,7 @@ r22tilt = -44.56/180*pi;
 
 % Parameters for controlling the youBot's wheels:
 forwBackVel = 0;
-leftRightVel = 0;
+leftRightVel =0;
 rotVel = 0;
 
 disp('Starting robot');
@@ -187,49 +187,56 @@ while true,
             robot_path = robot_path(2:end,:);
             fsm = 'movingtopoint';
         else
-            % Get the "goal" point
-            [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-            goal = int32([j i])
+            forwBackVel = 0;
+            leftRightVel =0;
+            rotVel = 0;
+            fsm = 'newpath';
+        end
+    
+    elseif strcmp(fsm, 'newpath'),
             
-            % Refactor the map
-            maptmp = map_refactor(map, [i j]);
-            print_map(313, maptmp, [], []);
-            
-            % Create the map to give to DXform
-            izeros = find(map == 0 & maptmp < 0) ;
-            map2(find(maptmp < 0)) = 0;
-            map2(izeros) = 0;
-            map2(find(maptmp > 0)) = 1;        
-            
-            %vInitialyze the navigation object
-            dx = DXform(map2, 'metric', 'cityblock');
-            dx.plan(goal);
-            
-            % Get the "start" point
-            tmp = dx.distancemap(izeros);
-            i2 = find(tmp == min(tmp));
+        % Get the "goal" point
+        [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+        goal = int32([j i])
+        
+        % Refactor the map
+        maptmp = map_refactor(map, [i j]);
+        print_map(313, maptmp, [], []);
+        
+        % Create the map to give to DXform
+        izeros = find(map == 0 & maptmp < 0) ;
+        map2(find(maptmp < 0)) = 0;
+        map2(izeros) = 0;
+        map2(find(maptmp > 0)) = 1;        
+        
+        %vInitialyze the navigation object
+        dx = DXform(map2, 'metric', 'cityblock');
+        dx.plan(goal);
+        
+        % Get the "start" point
+        tmp = dx.distancemap(izeros);
+        i2 = find(tmp == min(tmp));
 
-            if size(i2, 1) > 0,
-                [i j] = ind2sub(size(maptmp), izeros(i2(1)));
-                start = [j i]
-                
-                % Find the robot_path to the start point
-                robot_path = dx.path(start);
-                robot_path = [flipud(robot_path) ; start];
-                robot_path = switch_column(robot_path, 1, 2);
-                robot_path = reduce_path (robot_path)
-                destination = switch_column(start, 1, 2);
-            else
-                disp('No start point. The map is complete');
-                fsm = 'savemap';
-            end
+        if size(i2, 1) > 0,
+            [i j] = ind2sub(size(maptmp), izeros(i2(1)));
+            start = [j i]
+            
+            % Find the robot_path to the start point
+            robot_path = dx.path(start);
+            robot_path = [flipud(robot_path) ; start];
+            robot_path = switch_column(robot_path, 1, 2);
+            robot_path = reduce_path (robot_path)
+            destination = switch_column(start, 1, 2);
+            fsm = 'checkpoint';
+        else
+            fsm = 'savemap';
         end
         
     elseif strcmp(fsm, 'movingtopoint'),
         % Initialyze values
-        forwBackVel = 0;
-        leftRightVel = 0;
-        rotVel = 0;
+        % forwBackVel = 0;
+        % leftRightVel = 0;
+        % rotVel = 0;
         tresh = 2;
         
         % Find the cap
@@ -258,9 +265,18 @@ while true,
                 end
                 forwBackVel = -a*d;
                 rotVel = 10 * angdiff(angl, youbotEuler(3));
+                
+                if alpha < (pi / 10)
+                    leftRightVel = 8 * angdiff(angl, youbotEuler(3));
+                end
             end
         end
+    
     elseif strcmp(fsm, 'savemap'),
+        disp('No start point. The map is complete');
+        forwBackVel = 0;
+        leftRightVel =0;
+        rotVel = 0;
         fsm = 'finished';
     
     elseif strcmp(fsm, 'finished'),
