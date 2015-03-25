@@ -96,8 +96,8 @@ map = zeros(70, 70);
 maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
 
-[i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25])
-robot_path = [i ; j]' % Matrix representation
+[i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25]);
+robot_path = [i ; j]'; % Matrix representation
 
 destination = [];
 to = [];
@@ -270,7 +270,7 @@ while true,
                 rotVel = 10 * angdiff(angl, youbotEuler(3));
                 
                 if alpha < (pi / 10)
-                    leftRightVel = 8 * angdiff(angl, youbotEuler(3));
+                    leftRightVel = 0 * angdiff(angl, youbotEuler(3));
                 end
             end
         end
