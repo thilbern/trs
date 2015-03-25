@@ -197,7 +197,7 @@ while true,
             
         % Get the "goal" point
         [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-        goal = int32([j i])
+        goal = int32([j i]);
         
         % Refactor the map
         maptmp = map_refactor(map, [i j]);
@@ -219,14 +219,17 @@ while true,
 
         if size(i2, 1) > 0,
             [i j] = ind2sub(size(maptmp), izeros(i2(1)));
-            start = [j i]
+            start = [j i];
             
             % Find the robot_path to the start point
             robot_path = dx.path(start);
             robot_path = [flipud(robot_path) ; start];
             robot_path = switch_column(robot_path, 1, 2);
-            robot_path = reduce_path (robot_path)
+            old_size = size(robot_path)
+            robot_path = reduce_path (robot_path, map2);
+            new_size = size(robot_path)
             destination = switch_column(start, 1, 2);
+            disp('---')
             fsm = 'checkpoint';
         else
             fsm = 'savemap';
