@@ -1,7 +1,7 @@
 function [tables baskets baskets_entry] = find_basket (map)
     baskets = [];
     baskets_entry = [];
-    tables = []
+    tables = [];
     mask1 = [1 1 1 1 1 1; 
              1 1 1 1 0 0; 
              1 1 1 1 0 0; 
@@ -32,7 +32,7 @@ function [tables baskets baskets_entry] = find_basket (map)
              0 1 1 1 1 0; 
              0 1 1 1 1 0;
              0 0 0 0 0 0];
-    map_len = size(map)
+    map_len = size(map);
     for i = 1:map_len(1)-5,
         for j = 1:map_len(2)-5,
             tmp = map(i:(i+5),j:(j+5));

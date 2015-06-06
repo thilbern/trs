@@ -148,7 +148,7 @@ while true,
     
     % Read data from the Hokuyo sensor:
     [pts contacts] = youbot_hokuyo(vrep, h, vrep.simx_opmode_buffer);
-        
+    
     in = inpolygon(X, Y, [h.hokuyo1Pos(1) pts(1,:) h.hokuyo2Pos(1)],...
         [h.hokuyo1Pos(2) pts(2,:) h.hokuyo2Pos(2)]);
     xin = X(in);
@@ -172,7 +172,7 @@ while true,
         
         % Print the map
         map_print(222, map, [to;robot_path]);
-         
+        
         % Print the map
         if strcmp(master_fsm, 'map_discovery'),
             map_print(223, maptmp, []);
@@ -181,7 +181,7 @@ while true,
         end
     end
     
-
+    
     
     if strcmp(fsm, 'on_destination'),
         if strcmp(master_fsm, 'map_discovery'),
@@ -196,7 +196,7 @@ while true,
             izeros = find(map == 0 & maptmp < 0) ;
             map2(find(maptmp < 0)) = 0;
             map2(izeros) = 0;
-            map2(find(maptmp > 0)) = 1;        
+            map2(find(maptmp > 0)) = 1;
             
             %vInitialyze the navigation object
             dx = DXform(map2, 'metric', 'cityblock');
@@ -205,7 +205,7 @@ while true,
             % Get the "start" point
             tmp = dx.distancemap(izeros);
             i2 = find(tmp == min(tmp));
-
+            
             if size(i2, 1) > 0,
                 [i j] = ind2sub(size(maptmp), izeros(i2(1)));
                 start = [j i];
@@ -216,7 +216,7 @@ while true,
                 robot_path = switch_column(robot_path, 1, 2);
                 robot_path = reduce_path (robot_path, map2);
                 destination = switch_column(start, 1, 2);
-
+                
                 fsm = 'checkpoint';
             else
                 disp('No start point. The map is complete');
@@ -237,20 +237,86 @@ while true,
             end
         elseif strcmp(master_fsm, 'bascket_discovery'),
             disp('bascket_discovery')
-             [tables baskets baskets_entry] = find_basket (map)
+            [tables baskets baskets_entry] = find_basket (map);
             map_print(313, map, [tables; baskets_entry ; baskets]);
-            
-            
-            
-            
-            
-            
-            fsm = 'finished';
-            
+            fsm = 'move_arm';
         else
             fsm = 'finished';
         end
         
+        
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%% Grap objects     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    elseif strcmp(fsm, 'move_arm'),
+        % vrep.simxSetObjectOrientation(id, h.rgbdCasing, h.ref,...
+        %    [0 0 pi/4], vrep.simx_opmode_oneshot);
+        % for i = 1:5,
+        %     res = vrep.simxSetJointTargetPosition(id, h.armJoints(i), pickupJoints(i),...
+        %         vrep.simx_opmode_oneshot);
+        %     vrchk(vrep, res, true);
+        % end
+        
+        res = vrep.simxSetIntegerSignal(id, 'km_mode', 2,...
+                vrep.simx_opmode_oneshot_wait);
+        
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        
+        tpos(1) = tpos(1)+.01
+        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
+            vrep.simx_opmode_oneshot);
+        vrchk(vrep, res, true);
+        
+    elseif strcmp(fsm, 'extend'),
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        if norm(tpos-[0.3259 -0.0010 0.2951]) < .002,
+            res = vrep.simxSetIntegerSignal(id, 'km_mode', 2,...
+                vrep.simx_opmode_oneshot_wait);
+            fsm = 'reachout';
+        end
+    elseif strcmp(fsm, 'reachout'),
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        
+        if tpos(1) > .39,
+            fsm = 'grasp';
+        end
+        
+        tpos(1) = tpos(1)+.01;
+        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
+            vrep.simx_opmode_oneshot);
+        vrchk(vrep, res, true);
+    elseif strcmp(fsm, 'grasp'),
+        res = vrep.simxSetIntegerSignal(id, 'gripper_open', 0,...
+            vrep.simx_opmode_oneshot_wait);
+        vrchk(vrep, res);
+        pause(2);
+        res = vrep.simxSetIntegerSignal(id, 'km_mode', 0,...
+            vrep.simx_opmode_oneshot_wait);
+        fsm = 'backoff';
+    elseif strcmp(fsm, 'backoff'),
+        for i = 1:5,
+            res = vrep.simxSetJointTargetPosition(id, h.armJoints(i),...
+                startingJoints(i),...
+                vrep.simx_opmode_oneshot);
+            vrchk(vrep, res, true);
+        end
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        if norm(tpos-homeGripperPosition) < .02,
+            res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
+                vrep.simx_opmode_oneshot_wait);
+            vrchk(vrep, res);
+        end
+        if norm(tpos-homeGripperPosition) < .002,
+            fsm = 'finished';
+        end
         
         
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -273,7 +339,7 @@ while true,
             prev_dist
         end
         
-         
+        
         % de embourbage
         if (not(isnan(prev_dist))) & (mod(frameID,20) == 0) & (d >= prev_dist),
             disp('I m stuck');
@@ -306,13 +372,13 @@ while true,
         if (isnan(prev_dist)) |  (mod(frameID,20) == 0),
             prev_dist = d;
         end
-    
+        
     elseif strcmp(fsm, 'getout'),
         if (mod(frameID,10) == 0),
             fsm = 'movingtopoint';
             prev_dist = NaN;
         end
-
+        
     elseif strcmp(fsm, 'checkpoint'),
         if size(robot_path, 1) > 0,
             to = robot_path(1,:);
@@ -326,8 +392,8 @@ while true,
         end
         prev_dist = NaN;
         
-    
-    
+        
+        
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%% End of simulation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -228,6 +228,8 @@ while true,
         end
         
         tpos(1) = tpos(1)+.01;
+        % Print var
+        h.ptarget
         res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
             vrep.simx_opmode_oneshot);
         vrchk(vrep, res, true);
