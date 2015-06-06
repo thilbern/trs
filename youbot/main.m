@@ -88,11 +88,11 @@ vrchk(vrep, res, true);
 plotData = true;
 if plotData,
     close all;
-    subplot(311)
+    subplot(221)
     drawnow;
-    subplot(312)
+    subplot(222)
     drawnow;
-    subplot(313)
+    subplot(223)
     drawnow;
     [X,Y] = meshgrid(-5:.25:5,-5.5:.25:2.5);
     X = reshape(X, 1, []);
@@ -164,20 +164,20 @@ while true,
     % Print graphics
     if plotData,
         % Print Hokuyo sensos
-        subplot(311)
+        subplot(221)
         plot(xin, yin,'.c', pts(1,contacts), pts(2,contacts), '*b', [h.hokuyo1Pos(1) pts(1,:) h.hokuyo2Pos(1)], [h.hokuyo1Pos(2) pts(2,:) h.hokuyo2Pos(2)], 'r', 0, 0, 'ob', h.hokuyo1Pos(1), h.hokuyo1Pos(2), 'or', h.hokuyo2Pos(1), h.hokuyo2Pos(2), 'or');
         axis([-5.5 5.5 -5.5 2.5]);
         axis equal;
         drawnow;
         
         % Print the map
-        map_print(312, map, [to;robot_path]);
+        map_print(222, map, [to;robot_path]);
          
         % Print the map
         if strcmp(master_fsm, 'map_discovery'),
-            map_print(313, maptmp, []);
+            map_print(223, maptmp, []);
         else
-            map_print(313, map, [tables; baskets_entry ; baskets]);
+            map_print(223, map, [tables; baskets_entry ; baskets]);
         end
     end
     
@@ -229,7 +229,7 @@ while true,
                 map = ones(70, 70);
                 map(neg) = 0;
                 map = map(3:end-8,3:end-8);
-                map_print(312, map, []);
+                map_print(222, map, []);
                 save('map.mat', 'map', '-ascii');
                 
                 master_fsm = 'bascket_discovery';
@@ -239,6 +239,12 @@ while true,
             disp('bascket_discovery')
              [tables baskets baskets_entry] = find_basket (map)
             map_print(313, map, [tables; baskets_entry ; baskets]);
+            
+            
+            
+            
+            
+            
             fsm = 'finished';
             
         else
@@ -247,6 +253,9 @@ while true,
         
         
         
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%% Moving to points %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     elseif strcmp(fsm, 'movingtopoint'),
         % Find the cap
         [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
@@ -318,6 +327,10 @@ while true,
         prev_dist = NaN;
         
     
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%% End of simulation %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     elseif strcmp(fsm, 'finished'),
         pause(3);
         break;
@@ -325,6 +338,10 @@ while true,
         error(sprintf('Unknown state %s.', fsm));
     end
     
+    
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%% Update velicity   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Update wheel velocities
     res = vrep.simxPauseCommunication(id, true); vrchk(vrep, res);
     vrep.simxSetJointTargetVelocity(id, h.wheelJoints(1),...
