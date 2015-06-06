@@ -103,7 +103,8 @@ end
 maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
 baskets = [];
-entry = [];
+baskets_entry = [];
+tables = [];
 
 % Initialyze a matrix to represent the map
 map = zeros(70, 70);
@@ -176,7 +177,7 @@ while true,
         if strcmp(master_fsm, 'map_discovery'),
             map_print(313, maptmp, []);
         else
-            map_print(313, map, [entry ; baskets]);
+            map_print(313, map, [tables; baskets_entry ; baskets]);
         end
     end
     
@@ -236,8 +237,8 @@ while true,
             end
         elseif strcmp(master_fsm, 'bascket_discovery'),
             disp('bascket_discovery')
-             [baskets entry] = find_basket (map)
-            map_print(313, map, [entry ; baskets]);
+             [tables baskets baskets_entry] = find_basket (map)
+            map_print(313, map, [tables; baskets_entry ; baskets]);
             fsm = 'finished';
             
         else
