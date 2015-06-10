@@ -88,11 +88,15 @@ vrchk(vrep, res, true);
 plotData = true;
 if plotData,
     close all;
-    subplot(221)
+    subplot(321)
     drawnow;
-    subplot(222)
+    subplot(322)
     drawnow;
-    subplot(223)
+    subplot(323)
+    drawnow;
+    subplot(324)
+    drawnow;
+    subplot(325)
     drawnow;
     [X,Y] = meshgrid(-5:.25:5,-5.5:.25:2.5);
     X = reshape(X, 1, []);
@@ -102,12 +106,13 @@ end
 % Extra variables
 maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
+basketsid = 1;
+
+% Map, tables, baskets and objects
+map = zeros(70, 70);
 baskets = [];
 baskets_entry = [];
 tables = [];
-
-% Initialyze a matrix to represent the map
-map = zeros(70, 70);
 
 % Initialyze a first robot path
 [i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25]);
@@ -116,21 +121,32 @@ destination = [];
 to = [];
 prev_dist = NaN;
 
-
 % Parameters for controlling the youBot's wheels:
 forwBackVel = 0;
-leftRightVel =0;
+leftRightVel = 0;
 rotVel = 0;
 
 % Determine de milestone
-master_fsm = 'map_discovery'
-if exist('map.mat', 'file') == 2
+fsm = 'checkpoint';
+master_fsm = 'map_discovery';
+if exist('map.mat', 'file') == 2 & exist('map.mat', 'file') == 2,
     load('map.mat', '-ascii', 'map')
-    master_fsm = 'bascket_discovery';
+    load('map2.mat', '-ascii', 'map2')
+    master_fsm = 'back_to_origin';
+    fsm = 'on_destination';
 end
 
+% Print initial value of youbotPos and youbotEuler
+[res startYoubotPos] = vrep.simxGetObjectPosition(id, h.ref, -1,...
+    vrep.simx_opmode_buffer);
+vrchk(vrep, res, true);
+[res startYoubotEuler] = vrep.simxGetObjectOrientation(id, h.ref, -1,...
+    vrep.simx_opmode_buffer);
+vrchk(vrep, res, true);
+startYoubotPos
+startYoubotEuler
+    
 % Initialyze main loop
-fsm = 'checkpoint';
 frameID = 0;
 while true,
     tic
@@ -154,34 +170,30 @@ while true,
     xin = X(in);
     yin = Y(in);
     
-    
     % Learn the map
     if strcmp(master_fsm, 'map_discovery'),
         map = map_update(map, youbotEuler, youbotPos, pts, contacts, xin, yin);
     end
     
-    
     % Print graphics
     if plotData,
         % Print Hokuyo sensos
-        subplot(221)
+        subplot(321)
         plot(xin, yin,'.c', pts(1,contacts), pts(2,contacts), '*b', [h.hokuyo1Pos(1) pts(1,:) h.hokuyo2Pos(1)], [h.hokuyo1Pos(2) pts(2,:) h.hokuyo2Pos(2)], 'r', 0, 0, 'ob', h.hokuyo1Pos(1), h.hokuyo1Pos(2), 'or', h.hokuyo2Pos(1), h.hokuyo2Pos(2), 'or');
         axis([-5.5 5.5 -5.5 2.5]);
         axis equal;
         drawnow;
         
         % Print the map
-        map_print(222, map, [to;robot_path]);
+        map_print(322, map, [to;robot_path]);
         
         % Print the map
         if strcmp(master_fsm, 'map_discovery'),
-            map_print(223, maptmp, []);
+            map_print(323, maptmp, []);
         else
-            map_print(223, map, [tables; baskets_entry ; baskets]);
+            map_print(323, map2, [tables; baskets_entry ; baskets]);
         end
     end
-    
-    
     
     if strcmp(fsm, 'on_destination'),
         if strcmp(master_fsm, 'map_discovery'),
@@ -198,7 +210,7 @@ while true,
             map2(izeros) = 0;
             map2(find(maptmp > 0)) = 1;
             
-            %vInitialyze the navigation object
+            % Initialyze the navigation object
             dx = DXform(map2, 'metric', 'cityblock');
             dx.plan(goal);
             
@@ -224,99 +236,88 @@ while true,
                 leftRightVel =0;
                 rotVel = 0;
                 
-                % Save the map
+                % Save maps
                 neg = find(map < 0);
                 map = ones(70, 70);
                 map(neg) = 0;
-                map = map(3:end-8,3:end-8);
-                map_print(222, map, []);
-                save('map.mat', 'map', '-ascii');
                 
-                master_fsm = 'bascket_discovery';
+                % map = map(3:end-8,3:end-8);
+                map_print(322, map, []);
+                map_print(323, map2, []);
+                save('map.mat', 'map', '-ascii');
+                save('map2.mat', 'map2', '-ascii');
+                
+                master_fsm = 'back_to_origin';
                 fsm = 'on_destination';
             end
-        elseif strcmp(master_fsm, 'bascket_discovery'),
-            disp('bascket_discovery')
+            
+        elseif strcmp(master_fsm, 'back_to_origin'),
+            disp('Back to origin');
+            [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+            from = double([i j]);
+            [i j] = wrapper_vrep_to_matrix(startYoubotPos(1), startYoubotPos(2));
+            to = double([i j]);
+            
+            if (pdist([from ; to], 'euclidean') > 2),
+                robot_path = compute_path(map, int32(from), int32(to));
+                master_fsm = 'back_to_origin';
+                fsm = 'checkpoint';
+            else
+                master_fsm = 'find_objects';
+                fsm = 'on_destination';
+            end
+            
+        elseif strcmp(master_fsm, 'find_objects'),
+            disp('find_objects');
             [tables baskets baskets_entry] = find_basket (map);
-            map_print(313, map, [tables; baskets_entry ; baskets]);
-            fsm = 'move_arm';
+            map_print(323, map, [tables; baskets_entry ; baskets]);
+            find_objects (vrep, id, h, youbotPos, youbotEuler, tables)
+            master_fsm = 'discover_basckets';
+            fsm = 'on_destination';
+            basketsid = 0;
+            
+        elseif strcmp(master_fsm, 'discover_basckets'),
+            disp('discover_basckets');
+            if basketsid ~= 0,
+                [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+                from = double([i j]);
+                deltax = baskets(basketsid,1) - from(1);
+                deltay = baskets(basketsid,2) - from(2);
+                angl = atan2(deltay, deltax)
+                angl = angdiff(angl, youbotEuler(3))
+
+                [pts image] = take_picture(vrep, id, h, (angl-pi/2), pi/2, -0.04);
+                
+                % Display the RGB image
+                subplot(325)
+                imshow(image);
+                imsave
+                drawnow;
+                pause(5)
+            end
+            
+            basketsid = basketsid + 1;
+            if basketsid <= size(baskets_entry, 1),
+                [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+                from = int32([i j]);
+                baskets_entry(basketsid,:)
+                robot_path = compute_path(map2, from, baskets_entry(basketsid,:));
+                master_fsm = 'discover_basckets';
+                fsm = 'checkpoint';
+            else
+                fsm = 'finished';
+                basketsid = 1;
+            end
+            
         else
             fsm = 'finished';
         end
         
-        
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%% Grap objects     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    elseif strcmp(fsm, 'move_arm'),
-        % vrep.simxSetObjectOrientation(id, h.rgbdCasing, h.ref,...
-        %    [0 0 pi/4], vrep.simx_opmode_oneshot);
-        % for i = 1:5,
-        %     res = vrep.simxSetJointTargetPosition(id, h.armJoints(i), pickupJoints(i),...
-        %         vrep.simx_opmode_oneshot);
-        %     vrchk(vrep, res, true);
-        % end
         
-        res = vrep.simxSetIntegerSignal(id, 'km_mode', 2,...
-                vrep.simx_opmode_oneshot_wait);
-        
-        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
-            vrep.simx_opmode_buffer);
-        vrchk(vrep, res, true);
-        
-        tpos(1) = tpos(1)+.01
-        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
-            vrep.simx_opmode_oneshot);
-        vrchk(vrep, res, true);
-        
-    elseif strcmp(fsm, 'extend'),
-        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
-            vrep.simx_opmode_buffer);
-        vrchk(vrep, res, true);
-        if norm(tpos-[0.3259 -0.0010 0.2951]) < .002,
-            res = vrep.simxSetIntegerSignal(id, 'km_mode', 2,...
-                vrep.simx_opmode_oneshot_wait);
-            fsm = 'reachout';
-        end
-    elseif strcmp(fsm, 'reachout'),
-        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
-            vrep.simx_opmode_buffer);
-        vrchk(vrep, res, true);
-        
-        if tpos(1) > .39,
-            fsm = 'grasp';
-        end
-        
-        tpos(1) = tpos(1)+.01;
-        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
-            vrep.simx_opmode_oneshot);
-        vrchk(vrep, res, true);
-    elseif strcmp(fsm, 'grasp'),
-        res = vrep.simxSetIntegerSignal(id, 'gripper_open', 0,...
-            vrep.simx_opmode_oneshot_wait);
-        vrchk(vrep, res);
-        pause(2);
-        res = vrep.simxSetIntegerSignal(id, 'km_mode', 0,...
-            vrep.simx_opmode_oneshot_wait);
-        fsm = 'backoff';
-    elseif strcmp(fsm, 'backoff'),
-        for i = 1:5,
-            res = vrep.simxSetJointTargetPosition(id, h.armJoints(i),...
-                startingJoints(i),...
-                vrep.simx_opmode_oneshot);
-            vrchk(vrep, res, true);
-        end
-        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
-            vrep.simx_opmode_buffer);
-        vrchk(vrep, res, true);
-        if norm(tpos-homeGripperPosition) < .02,
-            res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
-                vrep.simx_opmode_oneshot_wait);
-            vrchk(vrep, res);
-        end
-        if norm(tpos-homeGripperPosition) < .002,
-            fsm = 'finished';
-        end
+       
         
         
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -356,12 +357,12 @@ while true,
                 else
                     alpha = abs(angdiff(angl, youbotEuler(3)));
                     if alpha < (pi / 8)
-                        a = (pi - alpha)/pi*30;
+                        a = (pi - alpha)/pi*10;
                     else
                         a = (pi - alpha)/pi*1;
                     end
                     forwBackVel = -a*d;
-                    rotVel = 10 * angdiff(angl, youbotEuler(3));
+                    rotVel = 20 * angdiff(angl, youbotEuler(3));
                     
                     if alpha < (pi / 10)
                         leftRightVel = 0 * angdiff(angl, youbotEuler(3));
@@ -403,7 +404,6 @@ while true,
     else
         error(sprintf('Unknown state %s.', fsm));
     end
-    
     
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%% Update velicity   %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

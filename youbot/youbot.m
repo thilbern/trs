@@ -141,17 +141,10 @@ while true,
         
         if youbotPos(1)+3.167 < .001,
             forwBackVel = 0;
-            vrep.simxSetObjectOrientation(id, h.rgbdCasing, h.ref,...
-                [0 0 pi/4], vrep.simx_opmode_oneshot);
-            for i = 1:5,
-                res = vrep.simxSetJointTargetPosition(id, h.armJoints(i), pickupJoints(i),...
-                    vrep.simx_opmode_oneshot);
-                vrchk(vrep, res, true);
-            end
             if plotData,
                 fsm = 'snapshot';
             else,
-                fsm = 'extend';
+                fsm = 'move_arm';
             end
         end
     elseif strcmp(fsm, 'snapshot'),
@@ -164,6 +157,10 @@ while true,
         % capture a 3D image at specific times, for instance when you believe you're
         % facing one of the tables.
         
+        % Set the orientation of the camera
+        vrep.simxSetObjectOrientation(id, h.rgbdCasing, h.ref,...
+            [0 0 pi/4], vrep.simx_opmode_oneshot);
+               
         % Reduce the view angle to better see the objects
         res = vrep.simxSetFloatSignal(id, 'rgbd_sensor_scan_angle', pi/8,...
             vrep.simx_opmode_oneshot_wait);
@@ -179,7 +176,9 @@ while true,
         % Each column of pts has [x;y;z;distancetosensor]
         % Here, we only keep points within 1 meter, to focus on the table
         pts = pts(1:3,pts(4,:)<1);
+        % pts = pts(:,pts(2, :) > -0.04);
         subplot(223)
+        % plot(pts(1,:), pts(2,:), '*');
         plot3(pts(1,:), pts(2,:), pts(3,:), '*');
         axis equal;
         view([-169 -46]);
@@ -207,8 +206,18 @@ while true,
         fprintf('Captured %i pixels.\n', resolution(1)*resolution(2));
         subplot(224)
         imshow(image);
+        imsave
         drawnow;
+        fsm = 'move_arm';
+        
+    elseif strcmp(fsm, 'move_arm'),
+        for i = 1:5,
+            res = vrep.simxSetJointTargetPosition(id, h.armJoints(i), pickupJoints(i),...
+                vrep.simx_opmode_oneshot);
+            vrchk(vrep, res, true);
+        end
         fsm = 'extend';
+        
     elseif strcmp(fsm, 'extend'),
         [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
             vrep.simx_opmode_buffer);
@@ -228,8 +237,6 @@ while true,
         end
         
         tpos(1) = tpos(1)+.01;
-        % Print var
-        h.ptarget
         res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
             vrep.simx_opmode_oneshot);
         vrchk(vrep, res, true);

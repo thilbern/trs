@@ -53,7 +53,7 @@ function [tables baskets baskets_entry] = find_basket (map)
                 baskets_entry = [i (j+5); baskets_entry];
                 
             elseif sum(sum(xor(tmp, table))) < 3
-                tables = [(i+2) (j+2); tables];
+                tables = [(i+2.5) (j+2.5); tables];
             end
         end
     end
