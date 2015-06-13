@@ -107,18 +107,22 @@ end
 maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
 basketsid = 1;
+tablesid = 1;
+speed_coef = 1;
 
 % Map, tables, baskets and objects
 map = zeros(70, 70);
 baskets = [];
 baskets_entry = [];
 tables = [];
+xyztable = [];
 
 % Initialyze a first robot path
 [i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25]);
 robot_path = [i ; j]'; % Matrix representation
 destination = [];
 to = [];
+dest_euler = NaN;
 prev_dist = NaN;
 
 % Parameters for controlling the youBot's wheels:
@@ -241,7 +245,6 @@ while true,
                 map = ones(70, 70);
                 map(neg) = 0;
                 
-                % map = map(3:end-8,3:end-8);
                 map_print(322, map, []);
                 map_print(323, map2, []);
                 save('map.mat', 'map', '-ascii');
@@ -271,10 +274,74 @@ while true,
             disp('find_objects');
             [tables baskets baskets_entry] = find_basket (map);
             map_print(323, map, [tables; baskets_entry ; baskets]);
-            find_objects (vrep, id, h, youbotPos, youbotEuler, tables)
-            master_fsm = 'discover_basckets';
+            master_fsm = 'discover_tables';
             fsm = 'on_destination';
-            basketsid = 0;
+            tablesid = 1;
+            
+        elseif strcmp(master_fsm, 'discover_tables'),
+            disp('discover_tables');
+            
+            if tablesid > 1,
+                xyztable = find_objects(vrep, id, h, youbotPos, youbotEuler, tables, xyztable);
+            end
+            if tablesid < 9,
+                r = 2.5;
+                if tablesid == 1,
+                    dest = tables(2,:) + [-r 0];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 2,
+                    dest = tables(2,:) + [-r -r];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 3,
+                    dest = tables(2,:) + [0 -r];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 4,
+                    dest = tables(2,:) + [r -r];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 5,
+                    dest = tables(2,:) + [r 0];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 6,
+                    dest = tables(2,:) + [r r];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 7,
+                    dest = tables(2,:) + [0 r];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    
+                elseif tablesid == 8,
+                    dest = tables(2,:) + [-r r];
+                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                end
+                robot_path = dest;
+                speed_coef = 0.5;
+                fsm = 'checkpoint';
+            else
+                % Save the xyz points
+                fileID = fopen('pc.xyz','w');
+                fprintf(fileID,'%f %f %f\n',xyztable);
+                fclose(fileID);
+                fprintf('Read %i 3D points, saved to pc.xyz.\n', max(size(xyztable)));
+                
+                % Compute clustering to dectect objects
+                [idx,C] = kmeans15(xyztable', 5, 'maxIter','1000');
+                subplot(324)
+                cla
+                plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*b', C(:,1), C(:,2), C(:,3), 'or');
+                axis equal;
+    
+                master_fsm = 'discover_basckets';
+                fsm = 'on_destination';
+                speed_coef = 1;
+                basketsid = 0;
+            end
+            tablesid = tablesid + 1;
+            
             
         elseif strcmp(master_fsm, 'discover_basckets'),
             disp('discover_basckets');
@@ -335,10 +402,10 @@ while true,
         % find the distance from the destination
         d = pdist([to ; [i j]], 'euclidean');
         
-        if (mod(frameID,20) == 0),
-            d
-            prev_dist
-        end
+        % if (mod(frameID,20) == 0),
+        %    d
+        %    prev_dist
+        %end
         
         
         % de embourbage
@@ -361,7 +428,7 @@ while true,
                     else
                         a = (pi - alpha)/pi*1;
                     end
-                    forwBackVel = -a*d;
+                    forwBackVel = -a*d*speed_coef;
                     rotVel = 20 * angdiff(angl, youbotEuler(3));
                     
                     if alpha < (pi / 10)
@@ -389,7 +456,21 @@ while true,
             forwBackVel = 0;
             leftRightVel =0;
             rotVel = 0;
+            fsm = 'final_rotate';
+        end
+        
+    elseif strcmp(fsm, 'final_rotate'),
+        disp('final_rotate');
+        if isnan(dest_euler)
+            disp('coucou');
             fsm = 'on_destination';
+        else
+            rotVel = 10*angdiff(dest_euler, youbotEuler(3));
+            if abs(angdiff(dest_euler, youbotEuler(3))) < 1/180*pi,
+                rotVel = 0;
+                fsm = 'on_destination';
+                dest_euler = NaN;
+            end
         end
         prev_dist = NaN;
         
