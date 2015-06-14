@@ -116,6 +116,7 @@ baskets = [];
 baskets_entry = [];
 tables = [];
 xyztable = [];
+objects = [];
 
 % Initialyze a first robot path
 [i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25]);
@@ -266,26 +267,56 @@ while true,
                 master_fsm = 'back_to_origin';
                 fsm = 'checkpoint';
             else
-                master_fsm = 'find_objects';
+                master_fsm = 'find_tables_basckets';
                 fsm = 'on_destination';
             end
             
-        elseif strcmp(master_fsm, 'find_objects'),
-            disp('find_objects');
+        elseif strcmp(master_fsm, 'find_tables_basckets'),
+            disp('find_tables_basckets');
             [tables baskets baskets_entry] = find_basket (map);
             map_print(323, map, [tables; baskets_entry ; baskets]);
-            master_fsm = 'discover_tables';
-            fsm = 'on_destination';
-            tablesid = 1;
+            
+            if exist('pc.xyz', 'file') == 2,
+                xyztable = importdata('pc.xyz');
+                xyztable = xyztable';
+                master_fsm = 'discover_tables_objects';
+                fsm = 'on_destination';
+            else
+                master_fsm = 'discover_tables';
+                fsm = 'on_destination';
+                tablesid = 1;
+            end
+            
             
         elseif strcmp(master_fsm, 'discover_tables'),
             disp('discover_tables');
             
             if tablesid > 1,
                 xyztable = find_objects(vrep, id, h, youbotPos, youbotEuler, tables, xyztable);
+                if tablesid == 2,
+                    disp('RGB photo of the table');
+                    view_angl = pi/3;
+                    angl = compute_photo_angle(youbotPos, youbotEuler, tables(2,:));
+                    [pts, image] = take_picture (vrep, id, h, angl-(pi/2), view_angl, -0.04);
+                    
+                    % Initialyze the transformation matrix youBot to Vrep
+                    transf = [cos(youbotEuler(3)) -sin(youbotEuler(3)) youbotPos(1) ; sin(youbotEuler(3)) cos(youbotEuler(3)) youbotPos(2) ; 0 0 1];
+        
+                    % Position of camera in VREP
+                    camVrep = transf * [0 ; -0.25 ; 1] 
+                    angl
+                    view_angl
+                    
+                    % Display the RGB image
+                    subplot(325)
+                    imshow(image);
+                    imsave
+                    drawnow;
+                    pause(5)
+                end
             end
             if tablesid < 9,
-                r = 2.5;
+                r = 3;
                 if tablesid == 1,
                     dest = tables(2,:) + [-r 0];
                     dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
@@ -319,7 +350,7 @@ while true,
                     dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
                 end
                 robot_path = dest;
-                speed_coef = 0.5;
+                speed_coef = 0.2;
                 fsm = 'checkpoint';
             else
                 % Save the xyz points
@@ -327,33 +358,37 @@ while true,
                 fprintf(fileID,'%f %f %f\n',xyztable);
                 fclose(fileID);
                 fprintf('Read %i 3D points, saved to pc.xyz.\n', max(size(xyztable)));
-                
-                % Compute clustering to dectect objects
-                [idx,C] = kmeans15(xyztable', 5, 'maxIter','1000');
-                subplot(324)
-                cla
-                plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*b', C(:,1), C(:,2), C(:,3), 'or');
-                axis equal;
     
-                master_fsm = 'discover_basckets';
+                master_fsm = 'discover_tables_objects';
                 fsm = 'on_destination';
                 speed_coef = 1;
-                basketsid = 0;
             end
             tablesid = tablesid + 1;
+
+
+        elseif strcmp(master_fsm, 'discover_tables_objects'),
+            disp('discover_tables_objects');
+        
+            % Compute clustering to dectect objects
+            [idx,C] = kmeans15(xyztable', 5, 'maxIter','100', 'replicates', 15);
+            subplot(324)
+            cla
+            plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*b', C(:,1), C(:,2), C(:,3), 'or');
+            axis equal;
             
+            objects = C
             
+            master_fsm = 'discover_basckets';
+            fsm = 'on_destination';
+            basketsid = 0;
+        
+        
         elseif strcmp(master_fsm, 'discover_basckets'),
             disp('discover_basckets');
             if basketsid ~= 0,
-                [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-                from = double([i j]);
-                deltax = baskets(basketsid,1) - from(1);
-                deltay = baskets(basketsid,2) - from(2);
-                angl = atan2(deltay, deltax)
-                angl = angdiff(angl, youbotEuler(3))
-
-                [pts image] = take_picture(vrep, id, h, (angl-pi/2), pi/2, -0.04);
+            
+                angl = compute_photo_angle(youbotPos, youbotEuler, baskets(basketsid,:));
+                [pts, image] = take_picture (vrep, id, h, angl-(pi/2), pi/3, -0.04);
                 
                 % Display the RGB image
                 subplot(325)
@@ -369,6 +404,7 @@ while true,
                 from = int32([i j]);
                 baskets_entry(basketsid,:)
                 robot_path = compute_path(map2, from, baskets_entry(basketsid,:));
+                dest_euler = compute_angle(baskets_entry(basketsid,:), baskets(basketsid,:)) - pi/2;
                 master_fsm = 'discover_basckets';
                 fsm = 'checkpoint';
             else
@@ -425,10 +461,12 @@ while true,
                     alpha = abs(angdiff(angl, youbotEuler(3)));
                     if alpha < (pi / 8)
                         a = (pi - alpha)/pi*10;
+                    elseif alpha < (pi / 16)
+                        a = (pi - alpha)/pi*5;
                     else
                         a = (pi - alpha)/pi*1;
                     end
-                    forwBackVel = -a*d*speed_coef;
+                    forwBackVel = -a*7*d*speed_coef;
                     rotVel = 20 * angdiff(angl, youbotEuler(3));
                     
                     if alpha < (pi / 10)
@@ -460,7 +498,6 @@ while true,
         end
         
     elseif strcmp(fsm, 'final_rotate'),
-        disp('final_rotate');
         if isnan(dest_euler)
             disp('coucou');
             fsm = 'on_destination';
