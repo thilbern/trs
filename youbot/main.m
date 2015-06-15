@@ -112,11 +112,12 @@ speed_coef = 1;
 
 % Map, tables, baskets and objects
 map = zeros(70, 70);
-baskets = [];
-baskets_entry = [];
-tables = [];
+baskets_mtrx = [];
+baskets_entry_mtrx = [];
+tables_mtrx = [0 0 ; 0 0];
+tables_vrep = [0 0 ; 0 0];
 xyztable = [];
-objects = [];
+objects_vrep = [];
 
 % Initialyze a first robot path
 [i j] = wrapper_vrep_to_matrix([-2 -2], [-4.75 -5.25]);
@@ -168,7 +169,7 @@ while true,
     vrchk(vrep, res, true);
     
     % Read data from the Hokuyo sensor:
-    [pts contacts] = youbot_hokuyo(vrep, h, vrep.simx_opmode_buffer);
+    [pts contacts closest1 closest2] = youbot_hokuyo(vrep, h, vrep.simx_opmode_buffer);
     
     in = inpolygon(X, Y, [h.hokuyo1Pos(1) pts(1,:) h.hokuyo2Pos(1)],...
         [h.hokuyo1Pos(2) pts(2,:) h.hokuyo2Pos(2)]);
@@ -179,12 +180,12 @@ while true,
     if strcmp(master_fsm, 'map_discovery'),
         map = map_update(map, youbotEuler, youbotPos, pts, contacts, xin, yin);
     end
-    
+
     % Print graphics
     if plotData,
         % Print Hokuyo sensos
         subplot(321)
-        plot(xin, yin,'.c', pts(1,contacts), pts(2,contacts), '*b', [h.hokuyo1Pos(1) pts(1,:) h.hokuyo2Pos(1)], [h.hokuyo1Pos(2) pts(2,:) h.hokuyo2Pos(2)], 'r', 0, 0, 'ob', h.hokuyo1Pos(1), h.hokuyo1Pos(2), 'or', h.hokuyo2Pos(1), h.hokuyo2Pos(2), 'or');
+        plot(xin, yin,'.c', pts(1,contacts), pts(2,contacts), '*b', [h.hokuyo1Pos(1) pts(1,:) h.hokuyo2Pos(1)], [h.hokuyo1Pos(2) pts(2,:) h.hokuyo2Pos(2)], 'r', 0, 0, 'ob', h.hokuyo1Pos(1), h.hokuyo1Pos(2), 'or', h.hokuyo2Pos(1), h.hokuyo2Pos(2), 'or', closest1(1), closest1(2), '*r', closest2(1), closest2(2), '*r');
         axis([-5.5 5.5 -5.5 2.5]);
         axis equal;
         drawnow;
@@ -196,7 +197,7 @@ while true,
         if strcmp(master_fsm, 'map_discovery'),
             map_print(323, maptmp, []);
         else
-            map_print(323, map2, [tables; baskets_entry ; baskets]);
+            map_print(323, map2, [tables_mtrx; baskets_entry_mtrx ; baskets_mtrx]);
         end
     end
     
@@ -273,8 +274,8 @@ while true,
             
         elseif strcmp(master_fsm, 'find_tables_basckets'),
             disp('find_tables_basckets');
-            [tables baskets baskets_entry] = find_basket (map);
-            map_print(323, map, [tables; baskets_entry ; baskets]);
+            [tables_mtrx baskets_mtrx baskets_entry_mtrx] = find_basket (map);
+            map_print(323, map, [tables_mtrx; baskets_entry_mtrx ; baskets_mtrx]);
             
             if exist('pc.xyz', 'file') == 2,
                 xyztable = importdata('pc.xyz');
@@ -292,18 +293,20 @@ while true,
             disp('discover_tables');
             
             if tablesid > 1,
-                xyztable = find_objects(vrep, id, h, youbotPos, youbotEuler, tables, xyztable);
+                xyztable = find_objects(vrep, id, h, youbotPos, youbotEuler, tables_mtrx, xyztable);
                 if tablesid == 2,
                     disp('RGB photo of the table');
                     view_angl = pi/3;
-                    angl = compute_photo_angle(youbotPos, youbotEuler, tables(2,:));
-                    [pts, image] = take_picture (vrep, id, h, angl-(pi/2), view_angl, -0.04);
+                    angl = compute_photo_angle(youbotPos, youbotEuler, tables_mtrx(2,:));
+                    [pts, image] = take_picture (vrep, id, h, angl-(pi/2), view_angl);
                     
                     % Initialyze the transformation matrix youBot to Vrep
                     transf = [cos(youbotEuler(3)) -sin(youbotEuler(3)) youbotPos(1) ; sin(youbotEuler(3)) cos(youbotEuler(3)) youbotPos(2) ; 0 0 1];
         
                     % Position of camera in VREP
-                    camVrep = transf * [0 ; -0.25 ; 1] 
+                    camVrep = transf * [0 ; -0.25 ; 1];
+                    camVrep(3) = 0.2257;
+                    camVrep
                     angl
                     view_angl
                     
@@ -312,42 +315,41 @@ while true,
                     imshow(image);
                     imsave
                     drawnow;
-                    pause(5)
                 end
             end
             if tablesid < 9,
                 r = 3;
                 if tablesid == 1,
-                    dest = tables(2,:) + [-r 0];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [-r 0];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 2,
-                    dest = tables(2,:) + [-r -r];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [-r -r];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 3,
-                    dest = tables(2,:) + [0 -r];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [0 -r];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 4,
-                    dest = tables(2,:) + [r -r];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [r -r];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 5,
-                    dest = tables(2,:) + [r 0];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [r 0];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 6,
-                    dest = tables(2,:) + [r r];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [r r];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 7,
-                    dest = tables(2,:) + [0 r];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [0 r];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                     
                 elseif tablesid == 8,
-                    dest = tables(2,:) + [-r r];
-                    dest_euler = compute_angle(dest, tables(2,:)) - pi/2;
+                    dest = tables_mtrx(2,:) + [-r r];
+                    dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
                 end
                 robot_path = dest;
                 speed_coef = 0.2;
@@ -368,15 +370,23 @@ while true,
 
         elseif strcmp(master_fsm, 'discover_tables_objects'),
             disp('discover_tables_objects');
+            
+            pts_small = xyztable(:,xyztable(3, :) < 0.180);
+            pts_hight = xyztable(:,xyztable(3, :) > 0.185);
         
+            % Detect table with better precision
+            pts_small = pts_small(:,pts_small(3, :) > 0.16);
+            P = mean(pts_small');
+            tables_vrep(2,:) = P(1,1:2);
+
             % Compute clustering to dectect objects
-            [idx,C] = kmeans15(xyztable', 5, 'maxIter','100', 'replicates', 15);
+            [idx,C] = kmeans15(pts_hight', 5, 'maxIter','100', 'replicates', 15);
             subplot(324)
             cla
-            plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*b', C(:,1), C(:,2), C(:,3), 'or');
+            plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*b', C(:,1), C(:,2), C(:,3), 'or', P(1), P(2), P(3), 'oc');
             axis equal;
             
-            objects = C
+            objects_vrep = C
             
             master_fsm = 'discover_basckets';
             fsm = 'on_destination';
@@ -384,33 +394,53 @@ while true,
         
         
         elseif strcmp(master_fsm, 'discover_basckets'),
-            disp('discover_basckets');
-            if basketsid ~= 0,
+            master_fsm = 'reach_object';
+            fsm = 'on_destination';
+            % disp('discover_basckets');
+            % if basketsid ~= 0,
+
+            %     angl = compute_photo_angle(youbotPos, youbotEuler, baskets_mtrx(basketsid,:));
+            %     [pts, image] = take_picture (vrep, id, h, angl-(pi/2), pi/3);
+            %     
+            %     % Display the RGB image
+            %     subplot(325)
+            %     imshow(image);
+            %     imsave
+            %     drawnow;
+            % end
             
-                angl = compute_photo_angle(youbotPos, youbotEuler, baskets(basketsid,:));
-                [pts, image] = take_picture (vrep, id, h, angl-(pi/2), pi/3, -0.04);
-                
-                % Display the RGB image
-                subplot(325)
-                imshow(image);
-                imsave
-                drawnow;
-                pause(5)
-            end
+            % basketsid = basketsid + 1;
+            % if basketsid <= size(baskets_entry_mtrx, 1),
+            %     [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+            %     from = int32([i j]);
+            %     robot_path = compute_path(map2, from, baskets_entry_mtrx(basketsid,:));
+            %     dest_euler = compute_angle(baskets_entry_mtrx(basketsid,:), baskets_mtrx(basketsid,:)) - pi/2;
+            %     master_fsm = 'discover_basckets';
+            %     fsm = 'checkpoint';
+            % else
+            %     fsm = 'finished';
+            %     basketsid = 1;
+            % end
             
-            basketsid = basketsid + 1;
-            if basketsid <= size(baskets_entry, 1),
-                [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-                from = int32([i j]);
-                baskets_entry(basketsid,:)
-                robot_path = compute_path(map2, from, baskets_entry(basketsid,:));
-                dest_euler = compute_angle(baskets_entry(basketsid,:), baskets(basketsid,:)) - pi/2;
-                master_fsm = 'discover_basckets';
-                fsm = 'checkpoint';
-            else
-                fsm = 'finished';
-                basketsid = 1;
-            end
+        elseif strcmp(master_fsm, 'reach_object'),
+            [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+            from = [i j];
+            [i j] = wrapper_vrep_to_matrix(objects_vrep(1,1), objects_vrep(1,2));
+            target = [i j];
+            dest = target-tables_mtrx(2,:);
+            dest = dest/norm(dest);
+
+            robot_path = compute_path(map2, int32(from), int32(tables_mtrx(2,:) + dest*5));
+            dest = tables_mtrx(2,:) + dest*2.3;
+            robot_path = [robot_path ; dest];
+            dest_euler = compute_angle(dest, tables_mtrx(2,:) - pi/2);
+
+            fsm = 'checkpoint';
+            master_fsm = 'grasp_object';
+            speed_coef = 0.05;
+            
+        elseif strcmp(master_fsm, 'grasp_object'),
+            fsm = 'move_arm';
             
         else
             fsm = 'finished';
@@ -419,7 +449,69 @@ while true,
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%% Grap objects     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    elseif strcmp(fsm, 'move_arm'),
+        res = vrep.simxSetIntegerSignal(id, 'km_mode', 2,...
+                vrep.simx_opmode_oneshot_wait);
         
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        
+        tpos = objects_vrep(1,:);
+        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
+            vrep.simx_opmode_oneshot);
+        vrchk(vrep, res, true);
+        
+        fsm ='extend';
+        
+    elseif strcmp(fsm, 'extend'),
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        if norm(tpos-objects_vrep(1,:)) < .002,
+            res = vrep.simxSetIntegerSignal(id, 'km_mode', 2,...
+                vrep.simx_opmode_oneshot_wait);
+            fsm = 'reachout';
+        end
+    elseif strcmp(fsm, 'reachout'),
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        
+        if tpos(1) > .39,
+            fsm = 'grasp';
+        end
+        
+        tpos(1) = tpos(1)+.01;
+        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
+            vrep.simx_opmode_oneshot);
+        vrchk(vrep, res, true);
+    elseif strcmp(fsm, 'grasp'),
+        res = vrep.simxSetIntegerSignal(id, 'gripper_open', 0,...
+            vrep.simx_opmode_oneshot_wait);
+        vrchk(vrep, res);
+        pause(2);
+        res = vrep.simxSetIntegerSignal(id, 'km_mode', 0,...
+            vrep.simx_opmode_oneshot_wait);
+        fsm = 'backoff';
+    elseif strcmp(fsm, 'backoff'),
+        for i = 1:5,
+            res = vrep.simxSetJointTargetPosition(id, h.armJoints(i),...
+                startingJoints(i),...
+                vrep.simx_opmode_oneshot);
+            vrchk(vrep, res, true);
+        end
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        if norm(tpos-homeGripperPosition) < .02,
+            res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
+                vrep.simx_opmode_oneshot_wait);
+            vrchk(vrep, res);
+        end
+        if norm(tpos-homeGripperPosition) < .002,
+            fsm = 'finished';
+        end
        
         
         
@@ -431,25 +523,20 @@ while true,
         [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
         from = double([i j]);
         to = double(to);
-        deltax = to(1) - from(1);
-        deltay = to(2) - from(2);
-        angl = atan2(deltay, deltax);
+        angl = compute_angle(from, to);
         
         % find the distance from the destination
         d = pdist([to ; [i j]], 'euclidean');
         
-        % if (mod(frameID,20) == 0),
-        %    d
-        %    prev_dist
-        %end
-        
-        
         % de embourbage
-        if (not(isnan(prev_dist))) & (mod(frameID,20) == 0) & (d >= prev_dist),
+        prev_dist = NaN;
+        % if (not(isnan(prev_dist))) & (mod(frameID,20) == 0) & (d >= prev_dist),
+        tresh = .2 * speed_coef;
+        if closest1(4) < tresh | closest2(4) < tresh,
             disp('I m stuck');
             forwBackVel = -forwBackVel;
-            rotVel = -rotVel;
-            leftRightVel = -leftRightVel;
+            rotVel = 0;
+            leftRightVel = 0;
             fsm = 'getout';
         else
             if (size(destination, 1) > 0) && (d < 3),
@@ -459,18 +546,18 @@ while true,
                     fsm = 'checkpoint';
                 else
                     alpha = abs(angdiff(angl, youbotEuler(3)));
-                    if alpha < (pi / 8)
+                    if alpha < (pi / 16)
                         a = (pi - alpha)/pi*10;
-                    elseif alpha < (pi / 16)
+                    elseif alpha < (pi / 8)
                         a = (pi - alpha)/pi*5;
                     else
                         a = (pi - alpha)/pi*1;
                     end
-                    forwBackVel = -a*7*d*speed_coef;
+                    forwBackVel = -a*5*d*speed_coef;
                     rotVel = 20 * angdiff(angl, youbotEuler(3));
                     
                     if alpha < (pi / 10)
-                        leftRightVel = 0 * angdiff(angl, youbotEuler(3));
+                        leftRightVel = 2 * angdiff(angl, youbotEuler(3));
                     end
                 end
             end
@@ -481,8 +568,22 @@ while true,
         
     elseif strcmp(fsm, 'getout'),
         if (mod(frameID,10) == 0),
-            fsm = 'movingtopoint';
+            fsm = 'getout_reorientation';
             prev_dist = NaN;
+        end
+        
+    elseif strcmp(fsm, 'getout_reorientation'),
+        % Find the cap
+        [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+        from = double([i j]);
+        to = double(to);
+        angl = compute_angle(from, to);
+        
+        forwBackVel = 0;
+        rotVel = 10*angdiff(angl, youbotEuler(3));
+        if abs(angdiff(angl, youbotEuler(3))) < 1/180*pi,
+            rotVel = 0;
+            fsm = 'movingtopoint';
         end
         
     elseif strcmp(fsm, 'checkpoint'),
