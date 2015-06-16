@@ -87,83 +87,47 @@
         
         
         
-        
-        function xyztable = find_objects (vrep, id, h, youbotPos, youbotEuler, tables, xyztable)
-    [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-    from = double([i j]);
-    deltax = tables(2,1) - from(1);
-    deltay = tables(2,2) - from(2);
-    angl = atan2(deltay, deltax);
-    angl = angdiff(angl, youbotEuler(3));
-   
-    [pts image] = take_picture(vrep, id, h, (angl-(pi/2)-(pi/16)), pi/4, -0.04);
+objectid = 1;       
+xyztable(1:3,find(idx==objectid)))
+m = C(:,objectid)'
+
+
+
+
+
+
+
+
+% TLS Line
+% (X-P(1))/N(1) = (Y-P(2))/N(2) = (Z-P(3))/N(3)
+% P is a point on the fitted line
+% and N its direction vector.
+
+% test data
+Data = importdata('youbot/pc.xyz');
+Data = Data';
+
+% Compute KMEANS
+[idx, C] = kmeans15(Data', 5, 'maxIter', 200, 'replicates', 10);
+C = C';
+plot3(X(1,:), X(2,:), X(3,:), '*b', C(1,:), C(2,:), C(3,:), 'or');
+hold on
+
+for id = 1:1:size(C,2),
+    d = Data(1:3,find(idx==id));
+    x = d(1,:)';
+    y = d(3,:)';
+    z = d(3,:)';
+    n = size(x,1);
     
-    %size(pts);
-    %[idx, C] = kmeans(pts,5);
-    
-    % Plot 3D points and save them to file
-    subplot(324)
-    cla
-    plot3(pts(1,:), pts(2,:), pts(3,:), '*'); % C(1,:), C(2,:), C(3,:), '*');
-    axis equal;
-    view([-169 -46]);
-    fileID = fopen('pc.xyz','w');
-    fprintf(fileID,'%f %f %f\n',pts);
-    fclose(fileID);
-    fprintf('Read %i 3D points, saved to pc.xyz.\n', max(size(pts)));
-   
-        
-    % Change axis of xyz points
-    [res camPos] = vrep.simxGetObjectPosition(h.id, h.rgbdCasing, h.ref, vrep.simx_opmode_oneshot_wait); 
-    vrchk(vrep, res);
-    [res camOri] = vrep.simxGetObjectOrientation(h.id, h.rgbdCasing, h.ref,  vrep.simx_opmode_oneshot_wait); 
-    vrchk(vrep, res);
-    
-    % Initialyze the transformation matrix 
-    teta = youbotEuler(3) - camOri(3) -pi/2 ;
-    radtodeg(teta)
-    dx = camPos(1)
-    dy = camPos(2)
-    transf = [cos(teta) -sin(teta) dx ; sin(teta) cos(teta) dy ; 0 0 1];
-    
-    size(xyztable)
-    size(transf * pts)
-    trans =  [pts(1,:) + dx ; pts(2,:) ; pts(3,:) + dy];
-    xyztable = horzcat(xyztable,  trans);
-    subplot(325)
-    plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*'); % C(1,:), C(2,:), C(3,:), '*');
-    axis equal;
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    % % Display the RGB image
-    % subplot(325)
-    % imshow(image);
-    % drawnow;
+    % line fit
+    P=[mean(x),mean(y),mean(z)]';
+    [U,S,V]=svd([x-P(1),y-P(2),z-P(3)]);
+    N=1/V(end,1)*V(:,1);
+
+    % Plot
+    A=P+dot([x(1),y(1),z(1)]'-P,N)*N/norm(N)^2;
+    B=P+dot([x(n),y(n),z(n)]'-P,N)*N/norm(N)^2;
+    plot3([A(1),B(1)],[A(2),B(2)],[A(3),B(3)])
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    % Initialyze the transformation matrix YOUBOT to world
-    teta = youbotEuler(3);
-    dx = youbotPos(1);
-    dy = youbotPos(2);
-    transf2 = [cos(teta) -sin(teta) dx ; sin(teta) cos(teta) dy ; 0 0 1];
+grid; hold off

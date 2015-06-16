@@ -2,24 +2,19 @@ function xyztable = find_objects (vrep, id, h, youbotPos, youbotEuler, tables, x
     % Initialyze the transformation matrix RGB rotation
     transf0 = [1 0 0 ; 0 0 -1 ; 0 1 0];
     
-     % Initialyze the transformation matrix youBot to Vrep
+    % Initialyze the transformation matrix youBot to Vrep
     teta = youbotEuler(3);
-    radtodeg(youbotEuler)
     dx = youbotPos(1);
     dy = youbotPos(2);
     transf2 = [cos(teta) -sin(teta) dx ; sin(teta) cos(teta) dy ; 0 0 1];
-        
-    % Compute the direction to take photos
-    camVrep = transf2 * [0 ; -0.25 ; 1];   
-    [i j] = wrapper_vrep_to_matrix(camVrep(1), camVrep(2));
-    from = double([i j]);
-    angl = compute_angle(from, tables(2,:));
-    angl = angdiff(angl, youbotEuler(3));
+    
+    angl = compute_photo_angle (youbotPos, youbotEuler, tables(2,:));
    
-    shift = [-5*pi/32 -4*pi/32 -3*pi/32 -pi/16 -pi/32 0  pi/32 pi/16 3*pi/32 4*pi/32 5*pi/32 ]
+    % shift = [-5*pi/32 -4*pi/32 -3*pi/32 -pi/32 0  pi/32 3*pi/32 4*pi/32 5*pi/32];
+    shift = [-3*pi/16 -2*pi/16 -pi/16 0 pi/16 2*pi/16 3*pi/16];
     for sh = shift,
         % Take picture
-        [pts image] = take_picture(vrep, id, h, (angl-(pi/2) + sh), pi/32, -0.03);
+        [pts image] = take_picture(vrep, id, h, (angl-(pi/2) + sh), pi/16);
         [res camOri] = vrep.simxGetObjectOrientation(h.id, h.rgbdCasing, h.ref,  vrep.simx_opmode_oneshot_wait); 
         vrchk(vrep, res);
         
@@ -34,15 +29,14 @@ function xyztable = find_objects (vrep, id, h, youbotPos, youbotEuler, tables, x
         tmp =  pts(3,:);
         pts(3,:) = 1;
         pts = transf1 * pts;
-        pts(3,:) = tmp;
-        tmp =  pts(3,:);
         pts(3,:) = 1;
         pts = transf2 * pts;
-        tmp = tmp + 0.2257;
-        pts(3,:) = tmp;
+        pts(3,:) = tmp + 0.2257;
         
         % Add new points to existing
-        xyztable = horzcat(xyztable,  pts);
+        pts_small = pts(:,pts(3, :) < 0.180);
+        pts_hight = pts(:,pts(3, :) > 0.185);
+        xyztable = horzcat(xyztable, horzcat(pts_hight, pts_small));
     end
     
     subplot(324)

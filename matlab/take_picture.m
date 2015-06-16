@@ -1,4 +1,4 @@
-function [pts, image] = take_picture (vrep, id, h, angl, view_angl, hight_filter)
+function [pts, image] = take_picture (vrep, id, h, angl, view_angl)
 
     % Set the rotation
     vrep.simxSetObjectOrientation(id, h.rgbdCasing, h.ref,...
@@ -17,8 +17,7 @@ function [pts, image] = take_picture (vrep, id, h, angl, view_angl, hight_filter
     fprintf('Capturing point cloud...\n');
     pts = youbot_xyz_sensor(vrep, h, vrep.simx_opmode_oneshot_wait);
     
-    pts = pts(1:3,pts(4,:)<1.5);
-    pts = pts(:,pts(2, :) > hight_filter);
+    pts = pts(1:3,pts(4,:) < 1.5);
     
     % Read data from the RGB camera
     res = vrep.simxSetIntegerSignal(id, 'handle_rgb_sensor', 1,...

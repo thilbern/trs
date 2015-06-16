@@ -1,4 +1,4 @@
-function [scanned_points contacts] = youbot_hokuyo(vrep, h, opmode, trans)
+function [scanned_points contacts closest1 closest2] = youbot_hokuyo(vrep, h, opmode, trans)
 % Reads from Hokuyo sensor.
 
 % (C) Copyright Renaud Detry 2013.
@@ -9,6 +9,8 @@ function [scanned_points contacts] = youbot_hokuyo(vrep, h, opmode, trans)
   pts2 = [];
   obst1 = [];
   obst2 = [];
+  closest1 = [];
+  closest2 = [];
 
   if nargin > 3,
     t1 = trans*h.hokuyo1Trans;
@@ -31,6 +33,11 @@ function [scanned_points contacts] = youbot_hokuyo(vrep, h, opmode, trans)
     % is returned at the 5m limit. As we do not want these points, we throw
     % away all points that are 5m far from the sensor.
     obst1 = pts1(4,:)<4.9999;
+    
+    tmp = pts1(:,obst1);
+    [V I] = min(tmp(4,:));
+    closest1 = tmp(:,I);
+    
     pts1 = pts1(1:3,:);
   end
 
@@ -41,9 +48,21 @@ function [scanned_points contacts] = youbot_hokuyo(vrep, h, opmode, trans)
     height = auxData(auxPacketInfo(1)+2);
     pts2 = reshape(auxData((auxPacketInfo(1)+2+1):end), 4, width*height);
     obst2 = pts2(4,:)<4.9999;
+    
+    tmp = pts2(:,obst2);
+    [V I] = min(tmp(4,:));
+    closest2 = tmp(:,I);
+    
     pts2 = pts2(1:3,:);
   end
   scanned_points = [ homtrans(t1, pts1) homtrans(t2, pts2) ];
   contacts = [obst1 obst2];
-
+  
+  dist = closest1(4,:);
+  closest1 = homtrans(t1, closest1(1:3,:));
+  closest1 = [closest1 ; dist];
+  
+  dist = closest2(4,:);
+  closest2 = homtrans(t2, closest2(1:3,:));
+  closest2 = [closest2 ; dist];
 end
