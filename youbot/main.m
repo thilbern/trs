@@ -52,6 +52,7 @@ armJointRanges = [-2.9496064186096,2.9496064186096;
     -1.5707963705063,1.5707963705063 ];
 
 startingJoints = [0,30.91*pi/180,52.42*pi/180,72.68*pi/180,0];
+transportJoints = [0,40*pi/180,52.42*pi/180,62*pi/180,0];
 
 % In this demo, we move the arm to a preset pose:
 pickupJoints = [90*pi/180, 19.6*pi/180, 113*pi/180, -41*pi/180, 0*pi/180];
@@ -87,7 +88,7 @@ vrchk(vrep, res, true);
 % Initialyze plotting
 plotData = true;
 if plotData,
-    close all;
+    % close all;
     subplot(321)
     drawnow;
     subplot(322)
@@ -108,7 +109,10 @@ maptmp = zeros(70, 70);
 map2 = zeros(70, 70);
 basketsid = 1;
 tablesid = 1;
+objectsid = 1;
 speed_coef = 1;
+tpos_arm = [];
+alpha = [];
 
 % Map, tables, baskets and objects
 map = zeros(70, 70);
@@ -380,7 +384,12 @@ while true,
             tables_vrep(2,:) = P(1,1:2);
 
             % Compute clustering to dectect objects
-            [idx,C] = kmeans15(pts_hight', 5, 'maxIter','100', 'replicates', 15);
+            try
+                [idx,C] = kmeans15(pts_hight', 5, 'maxIter','100', 'replicates', 15);
+            catch ME
+                disp('Empty cluster, retry...');
+                [idx,C] = kmeans15(pts_hight', 5, 'maxIter','100', 'replicates', 15);
+            end
             subplot(324)
             cla
             plot3(xyztable(1,:), xyztable(2,:), xyztable(3,:), '*b', C(:,1), C(:,2), C(:,3), 'or', P(1), P(2), P(3), 'oc');
@@ -419,32 +428,38 @@ while true,
                 fsm = 'on_destination';
                 master_fsm = 'back_to_origin2';
                 basketsid = 1;
+                objectsid = 1;
             end
             master_fsm = 'reach_object';
             fsm = 'on_destination';
-            fsm = 'move_arm';
             
-    elseif strcmp(master_fsm, 'back_to_origin2'),
+        elseif strcmp(master_fsm, 'back_to_origin2'),
             disp('Back to origin2');
-            [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
-            from = double([i j]);
-            [i j] = wrapper_vrep_to_matrix(startYoubotPos(1), startYoubotPos(2));
-            to = double([i j]);
-            
-            if (pdist([from ; to], 'euclidean') > 2),
-                robot_path = compute_path(map, int32(from), int32(to), 1);
-                master_fsm = 'back_to_origin2';
-                fsm = 'checkpoint';
+            if objectsid <= size(objects_vrep, 1)
+                [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+                from = double([i j]);
+                [i j] = wrapper_vrep_to_matrix(startYoubotPos(1), startYoubotPos(2));
+                to = double([i j]);
+                
+                if (pdist([from ; to], 'euclidean') > 2),
+                    robot_path = compute_path(map, int32(from), int32(to), 1);
+                    speed_coef = 1;
+                    master_fsm = 'back_to_origin2';
+                    fsm = 'checkpoint';
+                else
+                    master_fsm = 'reach_object';
+                    fsm = 'on_destination';
+                end
             else
-                master_fsm = 'reach_object';
-                fsm = 'on_destination';
+                fsm = 'finished';
             end
+            
             
         elseif strcmp(master_fsm, 'reach_object'),
             disp('reach_object');
             [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
             from = [i j];
-            [i j] = wrapper_vrep_to_matrix(objects_vrep(1,1), objects_vrep(1,2));
+            [i j] = wrapper_vrep_to_matrix(objects_vrep(objectsid,1), objects_vrep(objectsid,2));
             target = [i j];
             dest = target-tables_mtrx(2,:);
             dest = dest/norm(dest);
@@ -452,30 +467,113 @@ while true,
             robot_path = compute_path(map2, int32(from), int32(tables_mtrx(2,:) + dest*5), 0);
             dest = tables_mtrx(2,:) + dest*2.3;
             robot_path = [robot_path ; dest];
-            dest_euler = compute_angle(dest, tables_mtrx(2,:) - pi/2);
-
+            dest_euler = compute_angle(dest, tables_mtrx(2,:)) - pi/2;
+            
+            res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
+                vrep.simx_opmode_oneshot_wait); vrchk(vrep, res);
+            
+            speed_coef = 0.05;            
+            
             fsm = 'checkpoint';
-            master_fsm = 'grasp_object';
-            speed_coef = 0.05;
+            master_fsm = 'adjust_position';
+
+
+            
+        elseif strcmp(master_fsm, 'adjust_position'),
+            disp('adjust_position');
+            
+            tpos_arm = objects_vrep(objectsid,:);
+            tpos_arm = wrapper_vrep_to_arm(youbotPos, youbotEuler, tpos_arm)
+            
+            forwBackVel = 0;
+            leftRightVel = 0;
+            rotVel = 0;
+            
+            if (tpos_arm(2) > .1)
+                forwBackVel = 1
+            elseif (tpos_arm(2) < -.1)
+                forwBackVel = -1
+            elseif (tpos_arm(1) > .42)
+                leftRightVel = 1
+            elseif (tpos_arm(1) < -.42)
+                leftRightVel = -1
+            end
+            
+            if (forwBackVel == 0 & leftRightVel == 0 && rotVel == 0)
+                alpha = [tpos_arm(1) * .8 ; tpos_arm(2) * .8 ; tpos_arm(3)]
+                master_fsm = 'grasp_object';
+                fsm = 'on_destination';
+            else
+                fsm = 'adjust_position';
+                fsm = 'on_destination';
+            end
             
         elseif strcmp(master_fsm, 'grasp_object'),
+            disp('grasp_object');
             fsm = 'move_arm';
+            master_fsm = 'reach_basckets',
+            
+        elseif strcmp(master_fsm, 'reach_basckets'),
+            disp('reach_basckets');
+            basketsid = 1;
+            if basketsid <= size(baskets_entry_mtrx, 1),
+                [i j] = wrapper_vrep_to_matrix(youbotPos(1), youbotPos(2));
+                from = int32([i j]);
+                robot_path = compute_path(map2, from, baskets_entry_mtrx(basketsid,:), 0);
+                dest_euler = compute_angle(baskets_entry_mtrx(basketsid,:), baskets_mtrx(basketsid,:)) - pi/2;
+                master_fsm = 'adjust_position_basckets';
+                fsm = 'checkpoint';
+                speed_coef = 1;
+            else
+                fsm = 'finished';
+            end
+            
+        elseif strcmp(master_fsm, 'adjust_position_basckets'),
+            disp('adjust_position_basckets');
+            
+            tpos_arm = baskets_mtrx(basketsid,:)
+            [i j] = wrapper_matrix_to_vrep(tpos_arm(1), tpos_arm(2));
+            tpos_arm = wrapper_vrep_to_arm(youbotPos, youbotEuler, [i j .25])
+            
+            forwBackVel = 0;
+            leftRightVel = 0;
+            rotVel = 0;
+            
+            if (tpos_arm(2) > .1)
+                forwBackVel = 1
+            elseif (tpos_arm(2) < -.1)
+                forwBackVel = -1
+            elseif (tpos_arm(1) > .42)
+                leftRightVel = 1
+            elseif (tpos_arm(1) < -.42)
+                leftRightVel = -1
+            end
+            
+            if (forwBackVel == 0 & leftRightVel == 0 && rotVel == 0)
+                alpha = [tpos_arm(1) * .8 ; tpos_arm(2) * .8 ; tpos_arm(3)]
+                master_fsm = 'back_to_origin2';
+                fsm = 'move_arm';
+                objectsid = objectsid + 1;
+            else
+                fsm = 'adjust_position_basckets';
+                fsm = 'on_destination';
+            end
             
         else
             fsm = 'finished';
         end
         
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    %%%%%%%%% Grap objects     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%% Grasp objects     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     elseif strcmp(fsm, 'move_arm'),
         res = vrep.simxSetIntegerSignal(id, 'km_mode', 1,...
                 vrep.simx_opmode_oneshot_wait);
-        
-        tpos = [-2 -5 .7257];
-        tpos = wrapper_vrep_to_arm(youbotPos, youbotEuler, tpos)
-        % tpos = [0 0 .74]
-        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
+        %tpos_arm already Initialyzed
+        % alpha = .8
+        % tpos_arm = [-2 -5.25 0.185];
+        % tpos_arm = wrapper_vrep_to_arm(youbotPos, youbotEuler, tpos_arm)
+        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, alpha,...
             vrep.simx_opmode_oneshot);
         vrchk(vrep, res, true);
         
@@ -485,29 +583,33 @@ while true,
         [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
             vrep.simx_opmode_buffer);
         vrchk(vrep, res, true);
-        % t = [-2 -5 .72];
-        % t = wrapper_vrep_to_arm(youbotPos, youbotEuler, t);
-        t = [0 0 .74]';
-        if norm(tpos- t') < .002,
+        if norm(tpos- alpha') < .002,
+            tpos
+            res = vrep.simxSetIntegerSignal(id, 'km_mode', 1,...
+                vrep.simx_opmode_oneshot_wait);
+            alpha = [tpos_arm(1) * .99 ; tpos_arm(2) * .99 ; tpos_arm(3)]
+            res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, alpha,...
+            vrep.simx_opmode_oneshot);
+            vrchk(vrep, res, true);
+            fsm = 'reachout';
+        end
+        
+    elseif strcmp(fsm, 'reachout'),
+        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
+            vrep.simx_opmode_buffer);
+        vrchk(vrep, res, true);
+        if norm(tpos- alpha') < .002,
             tpos
             res = vrep.simxSetIntegerSignal(id, 'km_mode', 1,...
                 vrep.simx_opmode_oneshot_wait);
             fsm = 'grasp';
         end
-    elseif strcmp(fsm, 'reachout'), %shortcut
-        [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
-            vrep.simx_opmode_buffer);
-        vrchk(vrep, res, true);
         
-        if tpos(1) > .39,
-            fsm = 'grasp';
-        end
-        
-        tpos(1) = tpos(1)+.01;
-        res = vrep.simxSetObjectPosition(id, h.ptarget, h.armRef, tpos,...
-            vrep.simx_opmode_oneshot);
-        vrchk(vrep, res, true);
     elseif strcmp(fsm, 'grasp'),
+        res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
+            vrep.simx_opmode_oneshot_wait);
+        vrchk(vrep, res);
+        pause(2);
         res = vrep.simxSetIntegerSignal(id, 'gripper_open', 0,...
             vrep.simx_opmode_oneshot_wait);
         vrchk(vrep, res);
@@ -525,13 +627,24 @@ while true,
         [res tpos] = vrep.simxGetObjectPosition(id, h.ptip, h.armRef,...
             vrep.simx_opmode_buffer);
         vrchk(vrep, res, true);
-        if norm(tpos-homeGripperPosition) < .02,
-            res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
-                vrep.simx_opmode_oneshot_wait);
-            vrchk(vrep, res);
-        end
+        % if norm(tpos-homeGripperPosition) < .02,
+        %     res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
+        %         vrep.simx_opmode_oneshot_wait);
+        %     vrchk(vrep, res);
+        % end
         if norm(tpos-homeGripperPosition) < .002,
-            fsm = 'finished';
+            for i = 1:5,
+                res = vrep.simxSetIntegerSignal(id, 'gripper_open', 1,...
+                    vrep.simx_opmode_oneshot_wait); vrchk(vrep, res);
+                
+                res = vrep.simxSetJointTargetPosition(id, h.armJoints(i),...
+                    transportJoints(i),...
+                    vrep.simx_opmode_oneshot); vrchk(vrep, res, true);
+
+                res = vrep.simxSetIntegerSignal(id, 'gripper_open', 0,...
+                    vrep.simx_opmode_oneshot_wait); vrchk(vrep, res);
+            end
+            fsm = 'on_destination';
         end
        
         
